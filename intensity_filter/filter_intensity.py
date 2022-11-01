@@ -18,18 +18,24 @@ def euclidean_3d(points, query):
 def filter_by_radius(point_cloud, radius, dist_func=None):
     if dist_func is None:
         dist_func = euclidean_3d
-    i = 0
+
     mask_shape = len(point_cloud)
     output_mask = np.full(mask_shape, False)
-    for point in point_cloud:
+    for i, point in enumerate(point_cloud):
         mask = np.full(mask_shape, True)
         mask[i] = False
         dists = dist_func(point_cloud[mask], point)
-        output_mask[i] = np.min(dists) > radius or np.min(dists) < 1e-4
-
-        i += 1
+        output_mask[i] = np.min(dists) > radius
 
     return np.delete(point_cloud, output_mask)
+
+def find_duplication_pattern(point_cloud):
+
+    points_arr = structured_to_unstructured(point_cloud[['x', 'y', 'z']])
+    sorted_data = points_arr[np.lexsort(points_arr.T), :]
+    row_mask = np.append([True], np.any(np.diff(sorted_data, axis=0), 1))
+
+    return point_cloud[row_mask]
 
 PLOT = False
 
@@ -64,9 +70,14 @@ class PointCloudIntensityOffset(Node):
 
     def point_cloud_cb(self, msg):
         points = read_points(msg)
-
         points = np.delete(points, (points['intensity'] < 252) | (points['intensity'] > 254))
-        points = filter_by_radius(points, 0.1)
+        points = find_duplication_pattern(points)
+
+        #print(points[:50])
+        #points = np.delete(points, [i % 2 for i in range(len(points))])
+        #print(points[:50])
+        points = filter_by_radius(points, 0.05)
+        
         
 
         #kmeans = KMeans(n_clusters = 4).fit(structured_to_unstructured(points[['x', 'y', 'z']]))
