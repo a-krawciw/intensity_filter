@@ -5,23 +5,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
-def sph2cart(r, az, el):
-    z = r*np.sin(el)
-    hyp = r*np.cos(el)
-    y = hyp*np.sin(az)
-    x = hyp*np.cos(az)
+from utils import uint16_MAX
+from utils.geometry_utils import sph2cart
 
-    return x, y, z
-
-def cart2sph(x, y, z):
-    hxy = np.hypot(x, y)
-    r = np.hypot(hxy, z)
-    el = np.arctan2(z, hxy)
-    az = np.arctan2(y, x)
-    return r, az, el
-
-
-uint16_max = (2 ** 16 - 1)
 
 def image2sph(im):
     #np.rad2deg(az * 2) + 360, 20 - np.rad2deg(el * 2)
@@ -31,7 +17,7 @@ def image2sph(im):
         idx_y = iter.multi_index[1]
         az = np.deg2rad(idx_y - 360) / 2.0
         el = np.deg2rad(20 - idx_x) / 2.0
-        yield float(rho)/uint16_max*40, az, el
+        yield float(rho) / uint16_MAX * 40, az, el
 
 
 def main(folder):

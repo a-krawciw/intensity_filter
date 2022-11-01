@@ -7,15 +7,9 @@ import os
 
 from sensor_msgs_py.point_cloud2 import read_points
 
+from utils import uint16_MAX
 from utils.bag_file_parsing import BagFileParser
-
-
-def cart2sph(x, y, z):
-    hxy = np.hypot(x, y)
-    r = np.hypot(hxy, z)
-    el = np.arctan2(z, hxy)
-    az = np.arctan2(y, x)
-    return r, az, el
+from utils.geometry_utils import cart2sph
 
 
 def remove_duplicates(point_cloud):
@@ -57,9 +51,8 @@ def main(filename, out_folder):
 
         ims.set_data(range_image.T)
 
-        uint16_max = (2**16 - 1)
-        range_image = np.round( uint16_max / 40 * range_image)
-        range_image[range_image > uint16_max] = uint16_max
+        range_image = np.round( uint16_MAX / 40 * range_image)
+        range_image[range_image > uint16_MAX] = uint16_MAX
         range_im = Image.fromarray(range_image.T.astype(np.uint16, casting="unsafe"))
         mask_im = Image.fromarray(mask_image.T.astype(np.uint8, casting="unsafe")*255)
         range_im.save(os.path.join(out_folder, f"range/{j:05d}.png"))
