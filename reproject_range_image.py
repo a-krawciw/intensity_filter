@@ -81,10 +81,5 @@ def main(folder):
         fig.canvas.flush_events()
 
 
-
-
-
-    pass
-
 if __name__ == '__main__':
-    main("/home/asrlab/Documents/rosbag_lidar/coat_pass3")
+    main("/home/alec/Documents/UofT/AER1515/no_coat_pass2")
