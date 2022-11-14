@@ -1,12 +1,16 @@
 import os.path
+import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+import open3d as o3d
+from open3d.cuda.pybind.visualization import ViewControl
 
 from utils import uint16_MAX
 from utils.geometry_utils import sph2cart
+
 
 
 def image2sph(im):
@@ -19,21 +23,23 @@ def image2sph(im):
         el = np.deg2rad(20 - idx_x) / 2.0
         yield float(rho) / uint16_MAX * 40, az, el
 
+def create_confusion_matrix(pred, truth):
+    tp = 0
+    tn = 0
+    fp = 0
+    fn = 0
+
+
 
 def main(folder):
     range_dir = Path(os.path.join(folder, "range"))
     mask_dir = Path(os.path.join(folder, "mask"))
     preds_dir = Path(os.path.join(folder, "preds"))
 
-    plt.ion()
 
-    fig = plt.figure()
-    plt.suptitle("Prediction Comparisons")
 
-    ax_true = fig.add_subplot(1, 2, 1)
-    ax_pred = fig.add_subplot(1, 2, 2)
-
-    plt.show()
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
 
     for fname in sorted(os.listdir(range_dir)):
         range_image = Image.open(os.path.join(range_dir, fname))
@@ -45,41 +51,54 @@ def main(folder):
 
         dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('true_class', bool), ('pred_class', bool)]
         point_cloud = []
+        vec_full = o3d.utility.Vector3dVector()
+        vec_preds = o3d.utility.Vector3dVector()
+        vec_true = o3d.utility.Vector3dVector()
         for i, (rho, az, el) in enumerate(image2sph(range_image)):
             if rho > 0:
                 x, y, z = sph2cart(rho, az, el)
                 point_cloud.append((x, y, z, true_mask_flat[i] != 0, pred_mask_flat[i] != 0))
+                vec_full.append((x, y, z))
+                if true_mask_flat[i] != 0:
+                    vec_true.append((x, y, z))
+                if pred_mask_flat[i] != 0:
+                    vec_preds.append((x, y, z))
         pc_arr = np.array(point_cloud, dtype=dtype)
-        humans = pc_arr[pc_arr['true_class']]
-        pred_humans = pc_arr[pc_arr['pred_class']]
-        #ax.clear()
-        #ax.scatter(pc_arr['x'], pc_arr['y'], pc_arr['z'], c="g", s=0.1, alpha=0.1)
-        #ax.scatter(humans['x'], humans['y'], humans['z'], c="r", s=0.5)
-        #plt.title(f"Frame {fname}")
-        #ax.set_xlim([-10, 10])
-        #ax.set_ylim([-10, 10])
-        #ax.set_zlim([-10, 2])
 
-        ax_pred.clear()
-        ax_true.clear()
-        ax_true.scatter(pc_arr['x'], pc_arr['y'], c="g", s=0.1, alpha=0.1)
-        ax_true.scatter(humans['x'], humans['y'], c='r', s=0.5)
-        ax_pred.scatter(pc_arr['x'], pc_arr['y'], c="g", s=0.1, alpha=0.1)
-        ax_pred.scatter(pred_humans['x'], pred_humans['y'], c='r', s=0.5)
 
-        ax_true.axis("equal")
-        ax_pred.axis("equal")
-        ax_pred.set_title("Model Predictions")
-        ax_true.set_title("Ground Truth")
+        pcd_full = o3d.geometry.PointCloud(vec_full)
+        pcd_preds = o3d.geometry.PointCloud(vec_preds)
+        #pcd_preds ,_ = pcd_preds.remove_radius_outlier(nb_points=15, radius=0.2)
+        pcd_true = o3d.geometry.PointCloud(vec_true)
+        pcd_true ,_ = pcd_true.remove_radius_outlier(nb_points=3, radius=0.1)
 
-        ax_pred.set_xlim([-10, 10])
-        ax_pred.set_ylim([-10, 10])
-        ax_true.set_xlim([-10, 10])
-        ax_true.set_ylim([-10, 10])
 
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        labels = np.array(pcd_preds.cluster_dbscan(eps=0.2, min_points=15, print_progress=True))
+        pcd_human = pcd_preds.select_by_index(np.arange(0, len(labels))[labels == 0])
+        pcd_human.paint_uniform_color([0, 1, 0])
+        max_label = labels.max(initial=0)
+        print(f"point cloud has {max_label + 1} clusters")
+        colors = plt.get_cmap("tab20")(labels / (max_label if max_label > 0 else 1))
+        colors[labels < 0] = 0
+        pcd_preds.colors = o3d.utility.Vector3dVector(colors[:, :3])
+
+        print(pcd_human.get_center())
+        print(pcd_true.get_center())
+
+        pcd_true.paint_uniform_color([1, 0, 0])
+        #pcd_preds.paint_uniform_color([0, 1, 0])
+
+        pcd_full.paint_uniform_color([0.1, 0.1, 0.1])
+
+        #vis.add_geometry(pcd_full)
+        vis.add_geometry(pcd_true)
+        vis.add_geometry(pcd_human)
+        vis.get_view_control().scale(2)
+        vis.poll_events()
+        vis.update_renderer()
+        vis.clear_geometries()
+    #vis.destroy_window()
 
 
 if __name__ == '__main__':
-    main("/home/alec/Documents/UofT/AER1515/no_coat_pass2")
+    main("/home/alec/Documents/UofT/AER1515/coat_pass3")
